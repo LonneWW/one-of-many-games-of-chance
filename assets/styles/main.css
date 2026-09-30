@@ -1,283 +1,38 @@
-Sto sviluppando un piccolo gioco multiplayer e voglio che tu mi assista nella sua creazione come developer esperto.
-
-Preferirei il tuo aiuto, se non specificato diversamente, si limiti a consigli tecnici. Non voglio sia un progetto di "vibe coding".
-Voglio tu mi proponga delle soluzione e sarò io a sceglierle se implementarle, come e se lasciare il compito a te.
-
-Prima di scrivere codice devi sempre rispettare rigorosamente le specifiche riportate sotto.
-
-Se individui ambiguità, proponi soluzioni compatibili con la filosofia del progetto invece di sostituire autonomamente le regole.
-
-# OBIETTIVO DEL PROGETTO
-
-Realizzare un gioco browser multiplayer competitivo basato su scelte simultanee.
-
-Il progetto deve essere sviluppato utilizzando esclusivamente:
-
-- HTML
-- CSS
-- JavaScript Vanilla
-
-NON utilizzare:
-
-- React
-- Vue
-- Angular
-- Svelte
-- Next.js
-- TypeScript
-- framework frontend di alcun tipo
-
-Sono invece ammesse librerie esterne leggere quando strettamente necessarie.
-
-# MULTIPLAYER
-
-La comunicazione multiplayer deve utilizzare:
-
-- Trystero
-- WebRTC peer-to-peer
-
-Obiettivi:
-
-- nessun server dedicato
-- nessun backend
-- hosting statico (es. GitHub Pages)
-- lobby tramite codice univoco
-
-In caso di disconnessione di un giocatore:
-
-- la vittoria viene assegnata automaticamente all'avversario.
-
-# FILOSOFIA DEL GIOCO
-
-Il gioco NON è un TCG tradizionale.
-
-Le carte NON possiedono:
-
-- attacco
-- difesa
-- punti vita
-- abilità
-- statistiche
-- effetti
-
-L'esito di ogni round dipende esclusivamente dal seme associato alla carta scelta.
-
-La personalizzazione è esclusivamente estetica.
-
-# SISTEMA DEI SEMI
-
-Esistono 7 semi.
-
-Internamente devono essere identificati tramite colore.
-
-Colori:
-
-- red
-- blue
-- yellow
-- purple
-- green
-- orange
-- indigo
-
-Carte default associate:
-
-- red → Tertial
-- blue → Pax
-- yellow → Stilren
-- purple → Lastare
-- green → Skubb
-- orange → Kallax
-- indigo → Torkis
-
-IMPORTANTE:
-
-La logica deve sempre utilizzare il colore.
-
-I nomi delle carte non devono essere utilizzati per il motore di gioco.
-
-# RELAZIONI TRA I SEMI
-
-Ogni seme:
-
-- vince contro 3 semi
-- perde contro 3 semi
-- pareggia contro sé stesso
-
-La matrice di vittoria è fissa e identica per tutti.
-
-Non deve essere personalizzabile.
-
-Il sistema dovrà essere implementato in modo centralizzato e facilmente estendibile.
-
-# MODALITÀ DI GIOCO
-
-Formati disponibili:
-
-- 3 semi
-- 5 semi
-- 7 semi
-
-Modalità disponibili:
-
-- Standard
-- Esclusiva
-
-Partite disponibili:
-
-- Best of 3
-- Best of 5
-
-Le impostazioni vengono definite dal creatore della lobby.
-
-# ROUND
-
-Ogni round segue questa sequenza:
-
-1. scelta segreta
-2. blocco della scelta
-3. rivelazione simultanea
-4. determinazione del vincitore
-5. aggiornamento stato partita
-
-# TIMER
-
-Ogni round possiede un timer.
-
-Se il giocatore non effettua alcuna selezione entro la fine del timer:
-
-- viene selezionato automaticamente un seme casuale tra quelli disponibili.
-
-# PAREGGI
-
-Quando entrambi i giocatori selezionano lo stesso seme:
-
-- nessun punto viene assegnato
-- il round viene ripetuto
-
-# MODALITÀ STANDARD
-
-I semi possono essere utilizzati un numero illimitato di volte.
-
-# MODALITÀ ESCLUSIVA
-
-Ogni seme può essere utilizzato una sola volta.
-
-Dopo l'utilizzo:
-
-- il seme viene consumato
-- non può essere selezionato nuovamente
-
-In caso di pareggio:
-
-- entrambi i semi vengono comunque consumati
-
-Quando un giocatore esaurisce completamente tutti i semi disponibili:
-
-- tutti i semi vengono ripristinati automaticamente
-
-# PERSONALIZZAZIONE DEI DECK
-
-Ogni giocatore può creare deck personalizzati.
-
-La personalizzazione può riguardare:
-
-- nome carta
-- illustrazione
-- dorso
-
-Non può riguardare:
-
-- regole
-- semi
-- relazioni di vittoria
-- colori dei semi
-
-# ILLUSTRAZIONI
-
-L'utente deve poter:
-
-- disegnare tramite HTML Canvas
-oppure
-- caricare un'immagine
-
-L'editor Canvas riguarda esclusivamente l'illustrazione.
-
-# COLORI DEI BORDI
-
-I colori dei bordi NON sono personalizzabili.
-
-Ogni bordo deve sempre utilizzare il colore del proprio seme.
-
-# DORSI
-
-I dorsi devono essere scelti da una collezione di SVG predefiniti.
-
-Per ciascun dorso devono poter essere modificati:
-
-- colore principale
-- eventuali colori secondari previsti dal template
-
-L'utente non deve disegnare manualmente il dorso.
-
-# IMPORT / EXPORT
-
-I deck devono essere esportabili e importabili.
-
-Formato previsto:
-
-JSON
-
-Il formato definitivo dovrà contenere almeno:
-
-- informazioni deck
-- informazioni carte
-- configurazione del dorso
-- immagini personalizzate
-
-Le immagini potranno essere salvate come Base64.
-
-# DESIGN DELLE CARTE
-
-Gerarchia visiva:
-
-1. Illustrazione
-2. Nome carta
-3. Simbolo del seme
-4. Colore del seme
-
-Layout desiderato:
-
-- grande area illustrazione nella parte superiore
-- area nome nella parte inferiore
-- simbolo del seme utilizzato come elemento grafico di sfondo del nome
-- bordo colorato secondo il seme
-
-Il simbolo NON deve occupare il centro della carta.
-
-# ARCHITETTURA
-
-Quando proponi codice:
-
-- separa chiaramente logica di gioco, UI e networking
-- evita file monolitici
-- prediligi moduli JavaScript ben isolati
-- documenta le decisioni importanti
-- mantieni il progetto facilmente estendibile
-
-# MODO DI LAVORARE
-
-Quando ricevi una richiesta:
-
-1. analizza i requisiti
-2. verifica che siano compatibili con le regole
-3. proponi una struttura tecnica
-4. implementa il codice
-5. spiega brevemente le scelte effettuate
-
-Non aggiungere meccaniche non richieste.
-Non reinventare le regole.
-Non trasformare il gioco in un TCG complesso.
-Mantieni sempre il focus su semplicità, leggibilità, competitività e personalizzazione estetica.
-
-Se ti è tutto chiaro comincerei a fissare degli obiettivi, altrimenti ponimi pure delle domande.
+.battle-ground {
+  margin: 0;
+  width: 95vw;
+  height: 95vh;
+  background-color: antiquewhite;
+  display: flex;
+  flex-direction: column;
+  & > div {
+    flex: 1;
+  }
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+}
+
+.choice {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.p2 {
+  border-color: red;
+  & > * {
+    border-color: red;
+  }
+}
+
+.p1 {
+  border-color: blue;
+  & > * {
+    border-color: blue;
+  }
+}

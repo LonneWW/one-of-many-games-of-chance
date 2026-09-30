@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <link rel="stylesheet" href="/TCD/assets/styles/main.css" />
+  </head>
+  <body>
+    <button class="test-round">Test Round!</button>
+    <button class="test-advance-round">Test Advancement!</button>
+    <div class="game-rules">
+      <label>
+        Format
+        <select data-rule="format" id="format">
+          <option value="3" selected>3</option>
+          <option value="5">5</option>
+          <option value="7">7</option>
+        </select>
+      </label>
+      <label>
+        Best of
+        <select data-rule="bestOf" id="bestOf">
+          <option value="3" selected>3</option>
+          <option value="5">5</option>
+        </select>
+      </label>
+      <label>
+        Mode
+        <select data-rule="mode" id="mode">
+          <option value="standard" selected>Standard</option>
+          <option value="exclusive">Esclusiva</option>
+        </select>
+      </label>
+      <div id="currentRules"></div>
+    </div>
+    <button id="start">Start Round!</button>
+    <div><span id="timer">30</span>s</div>
+    <div>Actual score is: <span id="score">0 - 0</span></div>
+    <div class="panel">
+      <h2>Player 1</h2>
+      <button data-player="p1" data-color="red">Red</button>
+      <button data-player="p1" data-color="blue">Blue</button>
+      <button data-player="p1" data-color="green">Green</button>
+      <button data-player="p1" data-color="purple">Purple</button>
+      <button data-player="p1" data-color="yellow">Yellow</button>
+      <button data-player="p1" data-color="orange">Orange</button>
+      <button data-player="p1" data-color="indigo">Indigo</button>
+      <button data-player="p1" data-action="lock">Lock</button>
+    </div>
+    <div class="panel">
+      <h2>Player 2</h2>
+      <button data-player="p2" data-color="red">Red</button>
+      <button data-player="p2" data-color="blue">Blue</button>
+      <button data-player="p2" data-color="green">Green</button>
+      <button data-player="p2" data-color="purple">Purple</button>
+      <button data-player="p2" data-color="yellow">Yellow</button>
+      <button data-player="p2" data-color="orange">Orange</button>
+      <button data-player="p2" data-color="indigo">Indigo</button>
+      <button data-player="p2" data-action="lock">Lock</button>
+    </div>
+    <div id="result"></div>
+    <script src="/TCD/assets/scripts/main.js" type="module"></script>
+  </body>
+</html>

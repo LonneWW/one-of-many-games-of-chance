@@ -1,28 +1,23 @@
-/**
- * Core game rules.
- *
- * This module exposes the game-specific ruleset: the win matrix, lobby validation,
- * and the rule used to determine when a match is won.
- */
-import { FORMAT_COLORS, getFormatColors, isColor } from "./colors.js";
+import {
+  FORMAT_COLORS,
+  getFormatColors,
+  isColor,
+} from "./colors.js";
 
 export const WIN_MATRIX = Object.freeze({
-  red: ["blue", "green", "orange"],
-  blue: ["yellow", "purple", "indigo"],
-  yellow: ["red", "green", "orange"],
-  purple: ["red", "blue", "indigo"],
-  green: ["purple", "yellow", "indigo"],
-  orange: ["red", "purple", "blue"],
-  indigo: ["green", "yellow", "orange"],
+  red: ["blue", "yellow", "orange"], // lose against green, purple, indigo
+  blue: ["green", "yellow", "orange"], // lose against red, purple, indigo
+  yellow: ["purple", "green", "orange"], // lose against red, blue, indigo
+  purple: ["red", "blue", "indigo"], // lose against yellow, green, orange
+  green: ["purple", "red", "indigo"], // lose against blue, yellow, orange
+  orange: ["green", "purple", "indigo"], // lose against red, blue, yellow
+  indigo: ["blue", "yellow", "red"], // lose against green, purple, orange
 });
 
 export const BEST_OF_FORMATS = [3, 5];
+
 const VALID_FORMATS = Object.keys(FORMAT_COLORS).map(Number);
 
-/**
- * Resolves a round between two colors.
- * Returns null when both colors are equal, because a draw must not create a winner.
- */
 export function getWinnerColor(firstColor, secondColor) {
   if (!isColor(firstColor) || !isColor(secondColor)) {
     throw new Error(`Invalid colors: ${firstColor} vs ${secondColor}`);
@@ -37,11 +32,6 @@ export function getWinnerColor(firstColor, secondColor) {
     : secondColor;
 }
 
-/**
- * Validates the lobby configuration and returns a normalized, safe configuration object.
- *
- * This is a good place to centralize project rules before they reach the network or UI layers.
- */
 export function validateLobbyConfig(config = {}) {
   const format = Number(config.format ?? 7);
   const bestOf = Number(config.bestOf ?? 3);
@@ -70,9 +60,6 @@ export function validateLobbyConfig(config = {}) {
   };
 }
 
-/**
- * A match is won when a player reaches the required score threshold.
- */
 export function getWinningScore(bestOf) {
   return Math.ceil(Number(bestOf) / 2);
 }
