@@ -37,6 +37,7 @@ const initialMatchConfig = {
   timerSeconds: 5,
   mode: "standard",
 };
+const CHOICE_REVEAL_GRACE_PERIOD_MS = 1000;
 
 const state = {
   network: {
@@ -281,8 +282,10 @@ function createRoundState(timerSeconds) {
     playerBChoice: null,
     playerALocked: false,
     playerBLocked: false,
+    resolved: false,
     timeLeft: timerSeconds,
     timerId: null,
+    revealTimeoutId: null,
   };
 }
 
@@ -301,6 +304,13 @@ function isCurrentRoundMessage(message) {
     console.warn("Ignoring message for a different round.", {
       receivedRound: message.roundNumber,
       activeRound: state.match.roundNumber,
+    });
+    return false;
+  }
+  if (state.round.resolved) {
+    console.warn("Ignoring a message for an already resolved round.", {
+      type: message.type,
+      roundNumber: message.roundNumber,
     });
     return false;
   }
@@ -330,6 +340,7 @@ function resolveMatchDisconnect(connectionContext, localPlayerDisconnected) {
 }
 
 function applyRoundResult(result) {
+  state.round.resolved = true;
   state.match.lastRound = result;
 
   if (state.match.mode === "exclusive") {
@@ -352,7 +363,7 @@ function applyRoundResult(result) {
 
   state.ui.result = result;
   stopTimer();
-  resetRoundState();
+  if (!result.draw) resetRoundState();
 }
 
 function failMatch(message) {
@@ -394,11 +405,16 @@ function stopTimer() {
     clearInterval(state.round.timerId);
     state.round.timerId = null;
   }
+  if (state.round.revealTimeoutId !== null) {
+    clearTimeout(state.round.revealTimeoutId);
+    state.round.revealTimeoutId = null;
+  }
   state.ui.isRunning = false;
 }
 
 function startTimer() {
   if (state.ui.isRunning || state.match.complete) return;
+  if (state.round.resolved) resetRoundState();
 
   state.ui.isRunning = true;
   state.round.timeLeft = state.match.timerSeconds;
@@ -408,13 +424,25 @@ function startTimer() {
     if (state.round.timeLeft <= 0) {
       stopTimer();
       if (state.network.localPlayerKey === "playerA") {
-        for (const playerKey of ["playerA", "playerB"]) {
-          state.round[`${playerKey}Choice`] ??= autoChooseRandomColor(
-            state.match.players[playerKey],
-          );
-          state.round[`${playerKey}Locked`] = true;
+        state.round.playerAChoice ??= autoChooseRandomColor(
+          state.match.players.playerA,
+        );
+        state.round.playerALocked = true;
+
+        if (state.round.playerBChoice) {
+          state.round.playerBLocked = true;
+          resolveCurrentRound();
+        } else {
+          state.round.revealTimeoutId = setTimeout(() => {
+            if (state.round.resolved) return;
+            state.round.playerBChoice ??= autoChooseRandomColor(
+              state.match.players.playerB,
+            );
+            state.round.playerBLocked = true;
+            resolveCurrentRound();
+            publishState();
+          }, CHOICE_REVEAL_GRACE_PERIOD_MS);
         }
-        resolveCurrentRound();
       } else {
         const playerKey = state.network.localPlayerKey;
         if (
@@ -438,7 +466,7 @@ function startTimer() {
 }
 
 function resolveCurrentRound() {
-  if (state.network.localPlayerKey !== "playerA") return;
+  if (state.network.localPlayerKey !== "playerA" || state.round.resolved) return;
   stopTimer();
 
   const result = resolveRound(state.match, {
@@ -446,10 +474,11 @@ function resolveCurrentRound() {
     playerB: state.round.playerBChoice,
   });
 
+  state.round.resolved = true;
   state.ui.result = result;
   OutgoingPeerMessageHandler.sendRoundResult(result);
 
-  if (!state.match.complete) resetRoundState();
+  if (!state.match.complete && !result.draw) resetRoundState();
   publishState();
 }
 
@@ -475,7 +504,7 @@ export function getGameState() {
       },
       lastRound: state.match.lastRound ? { ...state.match.lastRound } : null,
     },
-    round: { ...state.round, timerId: null },
+    round: { ...state.round, timerId: null, revealTimeoutId: null },
     ui: { ...state.ui },
     chat: state.chat.map((entry) => ({ ...entry })),
   };

@@ -24,6 +24,18 @@ peer.on("disconnected", (id) => {
 });
 
 peer.on("connection", (conn) => {
+  if (activeConnection) {
+    console.warn(
+      `[PeerJS] Rifiutata una connessione aggiuntiva da ${conn.peer}.`,
+    );
+    if (conn.open) {
+      conn.close();
+    } else {
+      conn.on("open", () => conn.close());
+    }
+    return;
+  }
+
   observeConnection(conn, "in ingresso");
 });
 
