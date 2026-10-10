@@ -26,14 +26,20 @@ function normalizeSelection(playerState, selection) {
  * Resolves one round based on both player choices.
  */
 export function resolveRound(matchState, selections = {}) {
-  const p1Choice = normalizeSelection(matchState.players.p1, selections.p1);
+  const playerAChoice = normalizeSelection(
+    matchState.players.playerA,
+    selections.playerA,
+  );
 
-  const p2Choice = normalizeSelection(matchState.players.p2, selections.p2);
+  const playerBChoice = normalizeSelection(
+    matchState.players.playerB,
+    selections.playerB,
+  );
 
   const result = {
     roundNumber: matchState.roundNumber,
-    p1Choice,
-    p2Choice,
+    playerAChoice,
+    playerBChoice,
     draw: false,
     winnerKey: null,
     winnerColor: null,
@@ -41,29 +47,29 @@ export function resolveRound(matchState, selections = {}) {
     matchWinner: null,
   };
 
-  if (p1Choice === p2Choice) {
+  if (playerAChoice === playerBChoice) {
     result.draw = true;
     result.reason = "draw";
 
     if (matchState.mode === "exclusive") {
-      applyExclusiveConsumption(matchState, "p1", p1Choice);
-      applyExclusiveConsumption(matchState, "p2", p2Choice);
+      applyExclusiveConsumption(matchState, "playerA", playerAChoice);
+      applyExclusiveConsumption(matchState, "playerB", playerBChoice);
     }
 
     matchState.lastRound = result;
     return result;
   }
 
-  const winnerColor = getWinnerColor(p1Choice, p2Choice);
-  result.winnerKey = winnerColor === p1Choice ? "p1" : "p2";
+  const winnerColor = getWinnerColor(playerAChoice, playerBChoice);
+  result.winnerKey = winnerColor === playerAChoice ? "playerA" : "playerB";
   result.winnerColor = winnerColor;
   result.reason = "winner";
 
   matchState.scores[result.winnerKey] += 1;
 
   if (matchState.mode === "exclusive") {
-    applyExclusiveConsumption(matchState, "p1", p1Choice);
-    applyExclusiveConsumption(matchState, "p2", p2Choice);
+    applyExclusiveConsumption(matchState, "playerA", playerAChoice);
+    applyExclusiveConsumption(matchState, "playerB", playerBChoice);
   }
 
   matchState.lastRound = result;

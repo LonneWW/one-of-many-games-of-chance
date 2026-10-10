@@ -1,169 +1,656 @@
 import {
+  applyExclusiveConsumption,
   autoChooseRandomColor,
   createMatchState,
+  resolveDisconnect,
 } from "./modules/matchState.js";
+import {
+  checkMatchIds,
+  isMatchConfigValid,
+} from "./modules/peer-mex-validators.js";
 import { resolveRound } from "./modules/roundResolver.js";
+import {
+  connectToPeer,
+  disconnectPeer,
+  sendPeerMessage,
+  setConnectionCloseHandler,
+  setConnectionOpenHandler,
+  setMessageHandler,
+  setPeerLifecycleHandler,
+} from "./modules/network.js";
+import {
+  antiCheatMex,
+  chatMex,
+  choiceLockedMex,
+  choiceRevealMex,
+  endMex,
+  goneMex,
+  readyMex,
+  roundResultMex,
+  rulesMex,
+  startMex,
+} from "./modules/peer-mex-classes.js";
 
-const initialGameConfig = {
+const initialMatchConfig = {
   format: 3,
   bestOf: 3,
-  timerSeconds: 30,
+  timerSeconds: 5,
   mode: "standard",
 };
 
-let state = {
-  match: createMatchState(initialGameConfig),
-  round: {
-    p1Choice: null,
-    p2Choice: null,
-    p1Locked: false,
-    p2Locked: false,
-    timeLeft: 30,
-    timerId: null,
+const state = {
+  network: {
+    status: "initializing",
+    localPeerId: null,
+    remotePeerId: null,
+    connected: false,
+    localPlayerKey: null,
+    remotePlayerKey: null,
   },
+  lobby: {
+    playerAReady: false,
+    playerBReady: false,
+  },
+  match: createMatchState(initialMatchConfig),
+  round: createRoundState(initialMatchConfig.timerSeconds),
   ui: {
     result: null,
+    error: null,
     isRunning: false,
+    matchStarted: false,
   },
+  chat: [],
 };
 
-document.querySelectorAll("select[data-rule]").forEach((select) => {
-  select.addEventListener("change", (event) => {
-    const rule = event.target.dataset.rule;
-    const rawValue = event.target.value;
+const stateListeners = new Set();
 
-    state.match[rule] = rule === "mode" ? rawValue : Number(rawValue);
+class OutgoingPeerMessageHandler {
+  static onConnectionOpen(connectionContext) {
+    const isHost = connectionContext.direction === "in ingresso";
+    state.network.status = "connected";
+    state.network.remotePeerId = connectionContext.peerId;
+    state.network.connected = true;
+    state.network.localPlayerKey = isHost ? "playerA" : "playerB";
+    state.network.remotePlayerKey = isHost ? "playerB" : "playerA";
 
-    state.match = createMatchState(state.match);
-    render();
-  });
-});
-
-document.querySelectorAll("[data-color]").forEach((button) => {
-  button.addEventListener("click", () => {
-    const playerKey = button.dataset.player;
-    const color = button.dataset.color;
-    handleColorSelection(playerKey, color);
-  });
-});
-
-document.querySelectorAll("[data-action]").forEach((button) => {
-  button.addEventListener("click", () => {
-    const playerKey = button.dataset.player;
-    handleLock(playerKey);
-  });
-});
-
-function handleColorSelection(playerKey, color) {
-  if (state.round[`${playerKey}Locked`]) return;
-  console.log(color);
-  state.round[`${playerKey}Choice`] = color;
-  render();
-}
-
-function handleLock(playerKey) {
-  if (!state.round[`${playerKey}Choice`]) return;
-  state.round[`${playerKey}Locked`] = true;
-  tryResolveIfReady();
-  render();
-}
-
-const startBtn = document.querySelector("#start");
-
-startBtn.addEventListener("click", startTimer);
-
-function stopTimer() {
-  if (state.round.timerId) {
-    clearInterval(state.round.timerId);
-    state.round.timerId = null;
+    if (isHost) this.sendRules();
+    publishState();
   }
 
-  state.ui.isRunning = false;
+  static send(message) {
+    sendPeerMessage(message);
+  }
+
+  static sendRules() {
+    const config = {
+      format: state.match.format,
+      bestOf: state.match.bestOf,
+      timerSeconds: state.match.timerSeconds,
+      mode: state.match.mode,
+    };
+    this.send(new rulesMex(state.match.matchId, config));
+  }
+
+  static sendChat(message) {
+    this.send(new chatMex(state.match.matchId, message));
+  }
+
+  static sendReady(ready) {
+    this.send(new readyMex(state.match.matchId, ready));
+  }
+
+  static sendStart(start) {
+    this.send(new startMex(state.match.matchId, start));
+  }
+
+  static sendGone() {
+    this.send(new goneMex(state.match.matchId));
+  }
+
+  static sendChoiceLocked() {
+    this.send(
+      new choiceLockedMex(state.match.matchId, state.match.roundNumber),
+    );
+  }
+
+  static sendChoiceReveal(choice) {
+    this.send(
+      new choiceRevealMex(state.match.matchId, state.match.roundNumber, choice),
+    );
+  }
+
+  static sendRoundResult(round) {
+    this.send(new roundResultMex(state.match.matchId, round));
+  }
+
+  static sendAntiCheat(lastRound, receivedLastRound) {
+    this.send(
+      new antiCheatMex(state.match.matchId, lastRound, receivedLastRound),
+    );
+  }
+
+  static sendEnd(winnerKey, scores) {
+    this.send(new endMex(state.match.matchId, winnerKey, scores));
+  }
 }
 
-function startTimer() {
-  if (state.ui.isRunning) return;
-
-  stopTimer();
-  state.ui.isRunning = true;
-  state.round.timeLeft = state.match.timerSeconds;
-
-  state.round.timerId = setInterval(() => {
-    state.round.timeLeft -= 1;
-
-    if (state.round.timeLeft <= 0) {
-      clearInterval(state.round.timerId);
-      state.round.timerId = null;
-      state.round.p1Choice ??= autoChooseRandomColor(state.match.players.p1);
-      state.round.p2Choice ??= autoChooseRandomColor(state.match.players.p2);
-      resolveCurrentRound();
+class IncomingPeerMessageHandler {
+  static handle(message, connectionContext) {
+    if (
+      message.type !== "rules" &&
+      !checkMatchIds(state.match.matchId, message.matchId)
+    ) {
+      console.warn("Ignoring message from a different match.", {
+        type: message.type,
+        matchId: message.matchId,
+      });
       return;
     }
 
-    render();
-  }, 1000);
+    switch (message.type) {
+      case "chat":
+        this.handleChat(message.payload);
+        break;
+      case "ready":
+        this.handleReady(message.payload, connectionContext);
+        break;
+      case "start":
+        this.handleStart(message.payload);
+        break;
+      case "gone":
+        this.handleGone(connectionContext);
+        break;
+      case "choice-locked":
+        this.handleChoiceLocked(message, connectionContext);
+        break;
+      case "choice-reveal":
+        this.handleChoiceReveal(message, connectionContext);
+        break;
+      case "round-result":
+        this.handleRoundResult(message.payload);
+        break;
+      case "rules":
+        this.handleRules(message, connectionContext);
+        break;
+      case "anti-cheat":
+        this.handleAntiCheat(message.payload);
+        break;
+      case "end":
+        this.handleEnd(message.payload);
+        break;
+      default:
+        console.warn("No incoming handler for message type:", message.type);
+        return;
+    }
+
+    publishState();
+  }
+
+  static handleChat(payload) {
+    state.chat.push({ from: "Opponent", message: payload.message });
+  }
+
+  static handleReady(payload, connectionContext) {
+    const remotePlayerKey = getRemotePlayerKey(connectionContext);
+    state.lobby[`${remotePlayerKey}Ready`] = payload.ready;
+    maybeStartMatch();
+  }
+
+  static handleStart(payload) {
+    if (state.network.localPlayerKey !== "playerB" || !payload.start) return;
+    state.ui.matchStarted = true;
+    startTimer();
+  }
+
+  static handleGone(connectionContext) {
+    if (state.ui.matchStarted) {
+      resolveMatchDisconnect(connectionContext, false);
+    }
+  }
+
+  static handleChoiceLocked(message, connectionContext) {
+    if (!isCurrentRoundMessage(message)) return;
+    const remotePlayerKey = getRemotePlayerKey(connectionContext);
+    state.round[`${remotePlayerKey}Locked`] = true;
+    tryResolveForHost();
+  }
+
+  static handleChoiceReveal(message, connectionContext) {
+    if (!isCurrentRoundMessage(message)) return;
+    const remotePlayerKey = getRemotePlayerKey(connectionContext);
+    state.round[`${remotePlayerKey}Choice`] = message.payload.choice;
+    state.round[`${remotePlayerKey}Locked`] = true;
+    tryResolveForHost();
+  }
+
+  static handleRoundResult(result) {
+    if (state.network.localPlayerKey !== "playerB") return;
+    if (result.roundNumber < state.match.roundNumber) {
+      console.warn("Ignoring a duplicate round result.", result.roundNumber);
+      return;
+    }
+    if (result.roundNumber !== state.match.roundNumber) {
+      failMatch("Received a round result for an unexpected round.");
+      return;
+    }
+
+    applyRoundResult(result);
+  }
+
+  static handleRules(message, connectionContext) {
+    if (
+      state.network.localPlayerKey !== "playerB" ||
+      connectionContext.direction !== "in uscita" ||
+      !isMatchConfigValid(message.payload)
+    ) {
+      console.warn("Ignoring unexpected or invalid match rules.");
+      return;
+    }
+
+    state.match = createMatchState({
+      ...message.payload.config,
+      matchId: message.matchId,
+    });
+    state.round = createRoundState(state.match.timerSeconds);
+    state.ui.result = null;
+    state.ui.error = null;
+  }
+
+  static handleAntiCheat(payload) {
+    failMatch(`Match stopped after a protocol error: ${payload.reason}`);
+  }
+
+  static handleEnd(payload) {
+    state.match.complete = true;
+    state.match.winner = payload.winnerKey;
+    state.match.scores = { ...payload.scores };
+    state.match.reason = "match_won";
+    state.ui.matchStarted = false;
+    state.ui.result = {
+      reason: "match_won",
+      winnerKey: payload.winnerKey,
+      scores: { ...payload.scores },
+    };
+    stopTimer();
+  }
 }
 
-function resolveCurrentRound() {
-  stopTimer();
+function createRoundState(timerSeconds) {
+  return {
+    playerAChoice: null,
+    playerBChoice: null,
+    playerALocked: false,
+    playerBLocked: false,
+    timeLeft: timerSeconds,
+    timerId: null,
+  };
+}
 
-  const result = resolveRound(state.match, {
-    p1: state.round.p1Choice,
-    p2: state.round.p2Choice,
-  });
+function getRemotePlayerKey(connectionContext) {
+  if (
+    !connectionContext ||
+    connectionContext.peerId !== state.network.remotePeerId
+  ) {
+    throw new Error("Message received from an unexpected peer.");
+  }
+  return state.network.remotePlayerKey;
+}
 
-  state.ui.result = result;
+function isCurrentRoundMessage(message) {
+  if (message.roundNumber !== state.match.roundNumber) {
+    console.warn("Ignoring message for a different round.", {
+      receivedRound: message.roundNumber,
+      activeRound: state.match.roundNumber,
+    });
+    return false;
+  }
+  return true;
+}
 
-  if (state.match.complete) {
-    const winnerKey = state.match.winner;
-    const winnerName = state.match.players[winnerKey].name;
-    alert(`${winnerName} has won the match!`);
-    resetMatchState();
-    render();
+function resolveMatchDisconnect(connectionContext, localPlayerDisconnected) {
+  if (state.match.complete) return;
+
+  const disconnectedPlayerKey = localPlayerDisconnected
+    ? state.network.localPlayerKey
+    : getRemotePlayerKey(connectionContext);
+
+  if (!disconnectedPlayerKey) {
+    state.ui.error = "Could not determine which player disconnected.";
+    publishState();
     return;
   }
 
+  stopTimer();
+  state.ui.matchStarted = false;
+  state.ui.result = {
+    reason: "disconnect",
+    ...resolveDisconnect(state.match, disconnectedPlayerKey),
+  };
+  publishState();
+}
+
+function applyRoundResult(result) {
+  state.match.lastRound = result;
+
+  if (state.match.mode === "exclusive") {
+    applyExclusiveConsumption(state.match, "playerA", result.playerAChoice);
+    applyExclusiveConsumption(state.match, "playerB", result.playerBChoice);
+  }
+
+  if (!result.draw) {
+    state.match.scores[result.winnerKey] += 1;
+  }
+
+  if (result.matchWinner) {
+    state.match.complete = true;
+    state.match.winner = result.matchWinner.winnerKey;
+    state.match.reason = "match_won";
+    state.ui.matchStarted = false;
+  } else if (!result.draw) {
+    state.match.roundNumber += 1;
+  }
+
+  state.ui.result = result;
+  stopTimer();
   resetRoundState();
-  render();
 }
 
-function resetRoundState() {
-  state.round.p1Choice = null;
-  state.round.p2Choice = null;
-  state.round.p1Locked = false;
-  state.round.p2Locked = false;
-  state.round.timeLeft = state.match.timerSeconds;
-  state.ui.isRunning = false;
+function failMatch(message) {
+  stopTimer();
+  state.match.complete = true;
+  state.match.reason = "protocol-error";
+  state.ui.matchStarted = false;
+  state.ui.error = message;
+  state.ui.result = { reason: "protocol-error", message };
 }
 
-function resetMatchState() {
-  state.match = createMatchState(initialGameConfig);
-  resetRoundState();
+function maybeStartMatch() {
+  if (
+    state.network.localPlayerKey === "playerA" &&
+    state.lobby.playerAReady &&
+    state.lobby.playerBReady &&
+    !state.ui.matchStarted
+  ) {
+    OutgoingPeerMessageHandler.sendStart(true);
+    state.ui.matchStarted = true;
+    startTimer();
+  }
 }
 
-function render() {
-  const scoreEl = document.querySelector("#score");
-  const resultEl = document.querySelector("#result");
-  const rulesEl = document.querySelector("#currentRules");
-  const timerEl = document.querySelector("#timer");
-
-  scoreEl.textContent = `${state.match.scores.p1} - ${state.match.scores.p2}`;
-  timerEl.textContent = String(state.round.timeLeft);
-
-  resultEl.textContent = state.ui.result
-    ? JSON.stringify(state.ui.result, null, 2)
-    : "Nessun round ancora eseguito";
-
-  rulesEl.textContent = JSON.stringify(state.match);
-}
-
-function tryResolveIfReady() {
-  const bothSelected = Boolean(state.round.p1Choice && state.round.p2Choice);
-  const bothLocked = state.round.p1Locked && state.round.p2Locked;
-
-  if (bothSelected && bothLocked) {
+function tryResolveForHost() {
+  if (
+    state.network.localPlayerKey === "playerA" &&
+    state.round.playerALocked &&
+    state.round.playerBLocked &&
+    state.round.playerAChoice &&
+    state.round.playerBChoice
+  ) {
     resolveCurrentRound();
   }
 }
 
-render();
+function stopTimer() {
+  if (state.round.timerId !== null) {
+    clearInterval(state.round.timerId);
+    state.round.timerId = null;
+  }
+  state.ui.isRunning = false;
+}
+
+function startTimer() {
+  if (state.ui.isRunning || state.match.complete) return;
+
+  state.ui.isRunning = true;
+  state.round.timeLeft = state.match.timerSeconds;
+  state.round.timerId = setInterval(() => {
+    state.round.timeLeft -= 1;
+
+    if (state.round.timeLeft <= 0) {
+      stopTimer();
+      if (state.network.localPlayerKey === "playerA") {
+        for (const playerKey of ["playerA", "playerB"]) {
+          state.round[`${playerKey}Choice`] ??= autoChooseRandomColor(
+            state.match.players[playerKey],
+          );
+          state.round[`${playerKey}Locked`] = true;
+        }
+        resolveCurrentRound();
+      } else {
+        const playerKey = state.network.localPlayerKey;
+        if (
+          playerKey &&
+          state.round[`${playerKey}Choice`] &&
+          !state.round[`${playerKey}Locked`]
+        ) {
+          state.round[`${playerKey}Locked`] = true;
+          OutgoingPeerMessageHandler.sendChoiceReveal(
+            state.round[`${playerKey}Choice`],
+          );
+        }
+      }
+      publishState();
+      return;
+    }
+
+    publishState();
+  }, 1000);
+  publishState();
+}
+
+function resolveCurrentRound() {
+  if (state.network.localPlayerKey !== "playerA") return;
+  stopTimer();
+
+  const result = resolveRound(state.match, {
+    playerA: state.round.playerAChoice,
+    playerB: state.round.playerBChoice,
+  });
+
+  state.ui.result = result;
+  OutgoingPeerMessageHandler.sendRoundResult(result);
+
+  if (!state.match.complete) resetRoundState();
+  publishState();
+}
+
+function resetRoundState() {
+  state.round = createRoundState(state.match.timerSeconds);
+}
+
+function publishState() {
+  const snapshot = getGameState();
+  for (const listener of stateListeners) listener(snapshot);
+}
+
+export function getGameState() {
+  return {
+    network: { ...state.network },
+    lobby: { ...state.lobby },
+    match: {
+      ...state.match,
+      scores: { ...state.match.scores },
+      players: {
+        playerA: clonePlayerState(state.match.players.playerA),
+        playerB: clonePlayerState(state.match.players.playerB),
+      },
+      lastRound: state.match.lastRound ? { ...state.match.lastRound } : null,
+    },
+    round: { ...state.round, timerId: null },
+    ui: { ...state.ui },
+    chat: state.chat.map((entry) => ({ ...entry })),
+  };
+}
+
+function clonePlayerState(player) {
+  return {
+    ...player,
+    remainingColors: [...player.remainingColors],
+    usedColors: [...player.usedColors],
+  };
+}
+
+export function subscribeToGameState(listener) {
+  //da implementare in futuro, per spettatori e non
+  if (typeof listener !== "function") {
+    throw new TypeError("State listener must be a function.");
+  }
+  stateListeners.add(listener);
+  listener(getGameState());
+  return () => stateListeners.delete(listener);
+}
+
+export function configureMatch(config) {
+  if (state.network.connected || state.ui.matchStarted) {
+    throw new Error("Match rules cannot change after connecting.");
+  }
+  state.match = createMatchState(config);
+  state.round = createRoundState(state.match.timerSeconds);
+  publishState();
+}
+
+export function joinMatch(peerId) {
+  if (typeof peerId !== "string" || peerId.trim().length === 0) {
+    throw new TypeError("A valid Peer ID is required.");
+  }
+  state.network.status = "connecting";
+  state.ui.error = null;
+  publishState();
+  connectToPeer(peerId);
+}
+
+export function setReady(ready) {
+  if (typeof ready !== "boolean") {
+    throw new TypeError("Ready state must be a boolean.");
+  }
+  const localPlayerKey = state.network.localPlayerKey;
+  if (!localPlayerKey || !state.network.connected) {
+    throw new Error("Connect to the host before setting ready.");
+  }
+  if (state.ui.matchStarted) {
+    throw new Error("Ready state cannot change after the match starts.");
+  }
+
+  OutgoingPeerMessageHandler.sendReady(ready);
+  state.lobby[`${localPlayerKey}Ready`] = ready;
+  maybeStartMatch();
+  publishState();
+}
+
+export function startRound() {
+  if (state.network.localPlayerKey !== "playerA") {
+    throw new Error("Only the host can start a round.");
+  }
+  if (!state.network.connected || state.match.complete) {
+    throw new Error("A connected, active match is required.");
+  }
+  if (
+    !state.ui.matchStarted &&
+    (!state.lobby.playerAReady || !state.lobby.playerBReady)
+  ) {
+    throw new Error("Both players must be ready before the first round.");
+  }
+
+  OutgoingPeerMessageHandler.sendStart(true);
+  state.ui.matchStarted = true;
+  startTimer();
+}
+
+export function selectColor(color) {
+  const playerKey = state.network.localPlayerKey;
+  if (!state.ui.isRunning || !playerKey || state.match.complete) {
+    throw new Error("There is no active round for this player.");
+  }
+  if (state.round[`${playerKey}Locked`]) {
+    throw new Error("The choice for this round is already locked.");
+  }
+  if (!state.match.players[playerKey].remainingColors.includes(color)) {
+    throw new Error(`Color is not available: ${color}`);
+  }
+
+  state.round[`${playerKey}Choice`] = color;
+  publishState();
+}
+
+export function lockChoice() {
+  const playerKey = state.network.localPlayerKey;
+  if (
+    !state.network.connected ||
+    !state.ui.isRunning ||
+    state.match.complete ||
+    !playerKey
+  ) {
+    throw new Error("There is no active choice to lock.");
+  }
+  if (!state.round[`${playerKey}Choice`]) {
+    throw new Error("Select a color before locking the choice.");
+  }
+  if (state.round[`${playerKey}Locked`]) {
+    throw new Error("The choice for this round is already locked.");
+  }
+
+  if (playerKey === "playerB") {
+    OutgoingPeerMessageHandler.sendChoiceReveal(
+      state.round[`${playerKey}Choice`],
+    );
+    state.round[`${playerKey}Locked`] = true;
+  } else {
+    state.round[`${playerKey}Locked`] = true;
+    tryResolveForHost();
+  }
+  publishState();
+}
+
+export function sendChat(message) {
+  const text = typeof message === "string" ? message.trim() : "";
+  if (!text) throw new TypeError("Chat message cannot be empty.");
+  OutgoingPeerMessageHandler.sendChat(text);
+  state.chat.push({ from: "local", message: text });
+  publishState();
+}
+
+export function disconnectMatch() {
+  if (state.network.connected && !state.match.complete) {
+    OutgoingPeerMessageHandler.sendGone();
+  }
+  disconnectPeer();
+}
+
+setPeerLifecycleHandler((event) => {
+  switch (event.type) {
+    case "peer-open":
+      state.network.localPeerId = event.peerId;
+      state.network.status = "available";
+      break;
+    case "peer-error":
+    case "connection-error":
+      state.network.status = "error";
+      state.ui.error = event.error?.message ?? "Peer connection error.";
+      break;
+    case "peer-disconnected":
+      state.network.status = "signaling-disconnected";
+      break;
+    default:
+      console.warn("Unknown peer lifecycle event:", event.type);
+  }
+  publishState();
+});
+
+setConnectionOpenHandler((connectionContext) => {
+  OutgoingPeerMessageHandler.onConnectionOpen(connectionContext);
+});
+
+setMessageHandler((message, connectionContext) => {
+  IncomingPeerMessageHandler.handle(message, connectionContext);
+});
+
+setConnectionCloseHandler((connectionContext) => {
+  state.network.connected = false;
+  state.network.status = "disconnected";
+  if (state.ui.matchStarted) {
+    resolveMatchDisconnect(
+      connectionContext,
+      connectionContext.initiatedLocally,
+    );
+  }
+  publishState();
+});

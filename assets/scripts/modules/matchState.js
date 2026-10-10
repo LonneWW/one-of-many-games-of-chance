@@ -26,6 +26,24 @@ export function createPlayerState(id, name, format) {
   };
 }
 
+function generateMatchId() {
+  // Usa l'API nativa del modulo crypto
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  // Fallback per ambienti vecchi senza supporto a crypto.randomUUID
+  return (
+    "partita-" +
+    Date.now().toString(36) +
+    "-" +
+    Math.random().toString(36).substring(2, 9)
+  );
+}
+
 /**
  * Creates the global match state from lobby configuration.
  */
@@ -33,24 +51,25 @@ export function createMatchState(config = {}) {
   const settings = validateLobbyConfig(config);
 
   return {
+    matchId: config.matchId ?? generateMatchId(),
     format: settings.format,
     mode: settings.mode,
     bestOf: settings.bestOf,
     timerSeconds: settings.timerSeconds,
     roundNumber: 1,
-    scores: { p1: 0, p2: 0 },
+    scores: { playerA: 0, playerB: 0 },
     winner: null,
     complete: false,
     reason: null,
     players: {
-      p1: createPlayerState(
-        "p1",
-        config.playerOneName ?? "Player 1",
+      playerA: createPlayerState(
+        "playerA",
+        config.playerOneName ?? "Host",
         settings.format,
       ),
-      p2: createPlayerState(
-        "p2",
-        config.playerTwoName ?? "Player 2",
+      playerB: createPlayerState(
+        "playerB",
+        config.playerTwoName ?? "Joiner",
         settings.format,
       ),
     },
@@ -86,7 +105,7 @@ export function applyExclusiveConsumption(matchState, playerKey, color) {
  * Immediately resolves a disconnect in favor of the remaining player.
  */
 export function resolveDisconnect(matchState, disconnectedPlayerKey) {
-  const winnerKey = disconnectedPlayerKey === "p1" ? "p2" : "p1";
+  const winnerKey = disconnectedPlayerKey === "playerA" ? "playerB" : "playerA";
 
   matchState.complete = true;
   matchState.winner = winnerKey;
@@ -109,7 +128,7 @@ export function resolveDisconnect(matchState, disconnectedPlayerKey) {
 export function checkMatchWinner(matchState) {
   const scoreToWin = getWinningScore(matchState.bestOf);
 
-  for (const playerKey of ["p1", "p2"]) {
+  for (const playerKey of ["playerA", "playerB"]) {
     if (matchState.scores[playerKey] >= scoreToWin) {
       matchState.complete = true;
       matchState.winner = playerKey;

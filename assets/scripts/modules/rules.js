@@ -1,8 +1,4 @@
-import {
-  FORMAT_COLORS,
-  getFormatColors,
-  isColor,
-} from "./colors.js";
+import { FORMAT_COLORS, getFormatColors, isColor } from "./colors.js";
 
 export const WIN_MATRIX = Object.freeze({
   red: ["blue", "yellow", "orange"], // lose against green, purple, indigo
@@ -16,7 +12,7 @@ export const WIN_MATRIX = Object.freeze({
 
 export const BEST_OF_FORMATS = [3, 5];
 
-const VALID_FORMATS = Object.keys(FORMAT_COLORS).map(Number);
+export const VALID_FORMATS = Object.keys(FORMAT_COLORS).map(Number);
 
 export function getWinnerColor(firstColor, secondColor) {
   if (!isColor(firstColor) || !isColor(secondColor)) {

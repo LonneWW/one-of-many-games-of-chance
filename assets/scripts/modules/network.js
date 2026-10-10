@@ -1,35 +1,153 @@
 import "../peerjs.min.js";
+import { isMessageValid } from "./peer-mex-validators.js";
 
-// Inizializza PeerJS. Genera automaticamente un ID per questo utente.
-// Usa i server cloud gratuiti di PeerJS per il matchmaking.
-const peer = new window.Peer();
+const peer = new window.Peer({ debug: 0 });
+let activeConnection = null;
+let peerLifecycleHandler = null;
+let connectionOpenHandler = null;
+let messageHandler = null;
+let connectionCloseHandler = null;
+const locallyClosedConnections = new WeakSet();
 
-// Quando ti connetti con successo alla rete di matchmaking
 peer.on("open", (id) => {
-  console.log(`Il mio ID Peer è: ${id}`);
-  console.log(`Condividi questo ID con un amico per connettervi!`);
+  peerLifecycleHandler?.({ type: "peer-open", peerId: id });
 });
 
-// Ricevi una connessione da un altro utente
+peer.on("error", (error) => {
+  console.error(`[PeerJS] Errore peer (${error.type}):`, error);
+  peerLifecycleHandler?.({ type: "peer-error", error });
+});
+
+peer.on("disconnected", (id) => {
+  console.warn(`[PeerJS] Disconnesso dal server di segnalazione: ${id}`);
+  peerLifecycleHandler?.({ type: "peer-disconnected", peerId: id });
+});
+
 peer.on("connection", (conn) => {
-  console.log("Un peer si è connesso a te!");
-
-  // Ascolta i messaggi in entrata
-  conn.on("data", (data) => {
-    console.log(`Messaggio ricevuto: ${data}`);
-  });
+  observeConnection(conn, "in ingresso");
 });
 
-// FUNZIONE PER CONNETTERTI A QUALCUNO
-// Puoi chiamare questa funzione passando l'ID del tuo amico
-function connettiAUser(targetPeerId) {
-  const conn = peer.connect(targetPeerId);
+function observeConnection(conn, direction) {
+  activeConnection = conn;
+
+  const openTimeoutId = setTimeout(() => {
+    if (!conn.open) {
+      console.warn(
+        `[PeerJS] Connessione con ${conn.peer} ancora chiusa dopo 10 secondi.`,
+      );
+    }
+  }, 10_000);
 
   conn.on("open", () => {
-    console.log(`Connesso con successo a: ${targetPeerId}`);
-    conn.send("Ciao! Questo messaggio viaggia in P2P senza server!");
+    clearTimeout(openTimeoutId);
+    connectionOpenHandler?.({ peerId: conn.peer, direction });
+  });
+
+  conn.on("data", (data) => {
+    if (!validateIncomingMessage(data)) {
+      console.warn("[PeerJS] Messaggio ricevuto non valido; ignorato.", data);
+      return;
+    }
+
+    if (!messageHandler) {
+      console.warn(
+        "[PeerJS] Messaggio ricevuto, ma nessun handler è registrato.",
+      );
+      return;
+    }
+    messageHandler(data, { peerId: conn.peer, direction });
+  });
+
+  conn.on("close", () => {
+    clearTimeout(openTimeoutId);
+
+    if (connectionCloseHandler) {
+      connectionCloseHandler({
+        peerId: conn.peer,
+        direction,
+        initiatedLocally: locallyClosedConnections.has(conn),
+      });
+    }
+
+    if (activeConnection === conn) {
+      activeConnection = null;
+    }
+  });
+
+  conn.on("error", (error) => {
+    console.error(
+      `[PeerJS] Errore connessione con ${conn.peer} (${error.type}):`,
+      error,
+    );
+    peerLifecycleHandler?.({
+      type: "connection-error",
+      peerId: conn.peer,
+      error,
+    });
   });
 }
 
-// Espone la funzione globalmente per testarla dalla console del browser
-window.connettiAUser = connettiAUser;
+export function disconnectPeer() {
+  if (!activeConnection) {
+    console.warn("[PeerJS] Non c'è una connessione dati attiva.");
+    return;
+  }
+
+  const connectionToClose = activeConnection;
+  activeConnection = null;
+  locallyClosedConnections.add(connectionToClose);
+
+  connectionToClose.close();
+}
+
+export function connectToPeer(peerId) {
+  if (typeof peerId !== "string" || peerId.trim().length === 0) {
+    throw new TypeError("A valid Peer ID is required.");
+  }
+
+  const conn = peer.connect(peerId.trim());
+  observeConnection(conn, "in uscita");
+}
+
+export function sendPeerMessage(message) {
+  if (!activeConnection?.open) {
+    throw new Error("Cannot send a peer message without an open connection.");
+  }
+  if (!isMessageValid(message)) {
+    throw new TypeError("Refusing to send an invalid peer message.");
+  }
+
+  activeConnection.send(message);
+}
+
+export function setConnectionOpenHandler(handler) {
+  if (typeof handler !== "function") {
+    throw new TypeError("Connection-open handler must be a function.");
+  }
+  connectionOpenHandler = handler;
+}
+
+export function setPeerLifecycleHandler(handler) {
+  if (typeof handler !== "function") {
+    throw new TypeError("Peer lifecycle handler must be a function.");
+  }
+  peerLifecycleHandler = handler;
+}
+
+export function setMessageHandler(handler) {
+  if (typeof handler !== "function") {
+    throw new TypeError("Message handler must be a function.");
+  }
+  messageHandler = handler;
+}
+
+export function setConnectionCloseHandler(handler) {
+  if (typeof handler !== "function") {
+    throw new TypeError("Connection-close handler must be a function.");
+  }
+  connectionCloseHandler = handler;
+}
+
+function validateIncomingMessage(data) {
+  return isMessageValid(data);
+}
