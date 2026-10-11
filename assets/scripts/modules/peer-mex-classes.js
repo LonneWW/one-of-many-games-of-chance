@@ -6,6 +6,8 @@ import {
 } from "./peer-mex-validators.js";
 import { isColor } from "./colors.js";
 
+// Classes created to establish the data format of incoming and outgoing peer messages
+
 class mexBase {
   constructor(type, matchId) {
     if (!isTypeValid(type) || !isMatchIdValid(matchId)) {

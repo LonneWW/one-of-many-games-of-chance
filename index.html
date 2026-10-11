@@ -1,65 +1,221 @@
 <!doctype html>
-<html lang="en">
+<html lang="it">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
-    <link rel="stylesheet" href="/TCD/assets/styles/main.css" />
+    <meta
+      name="description"
+      content="Interfaccia di test per la partita multiplayer peer-to-peer."
+    />
+    <title>Test multiplayer</title>
+    <link rel="stylesheet" href="assets/styles/main.css" />
   </head>
   <body>
-    <button class="test-round">Test Round!</button>
-    <button class="test-advance-round">Test Advancement!</button>
-    <div class="game-rules">
-      <label>
-        Format
-        <select data-rule="format" id="format">
-          <option value="3" selected>3</option>
-          <option value="5">5</option>
-          <option value="7">7</option>
-        </select>
-      </label>
-      <label>
-        Best of
-        <select data-rule="bestOf" id="bestOf">
-          <option value="3" selected>3</option>
-          <option value="5">5</option>
-        </select>
-      </label>
-      <label>
-        Mode
-        <select data-rule="mode" id="mode">
-          <option value="standard" selected>Standard</option>
-          <option value="exclusive">Esclusiva</option>
-        </select>
-      </label>
-      <div id="currentRules"></div>
-    </div>
-    <button id="start">Start Round!</button>
-    <div><span id="timer">30</span>s</div>
-    <div>Actual score is: <span id="score">0 - 0</span></div>
-    <div class="panel">
-      <h2>Player 1</h2>
-      <button data-player="p1" data-color="red">Red</button>
-      <button data-player="p1" data-color="blue">Blue</button>
-      <button data-player="p1" data-color="green">Green</button>
-      <button data-player="p1" data-color="purple">Purple</button>
-      <button data-player="p1" data-color="yellow">Yellow</button>
-      <button data-player="p1" data-color="orange">Orange</button>
-      <button data-player="p1" data-color="indigo">Indigo</button>
-      <button data-player="p1" data-action="lock">Lock</button>
-    </div>
-    <div class="panel">
-      <h2>Player 2</h2>
-      <button data-player="p2" data-color="red">Red</button>
-      <button data-player="p2" data-color="blue">Blue</button>
-      <button data-player="p2" data-color="green">Green</button>
-      <button data-player="p2" data-color="purple">Purple</button>
-      <button data-player="p2" data-color="yellow">Yellow</button>
-      <button data-player="p2" data-color="orange">Orange</button>
-      <button data-player="p2" data-color="indigo">Indigo</button>
-      <button data-player="p2" data-action="lock">Lock</button>
-    </div>
-    <div id="result"></div>
-    <script src="/TCD/assets/scripts/main.js" type="module"></script>
+    <main class="app">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Prototipo multiplayer</p>
+          <h1>Partita di test</h1>
+        </div>
+        <p id="connection-status" class="status" role="status">
+          Inizializzazione della rete…
+        </p>
+      </header>
+
+      <section class="top-panel" aria-label="Impostazioni e connessione">
+        <form id="settings-form" class="settings">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Lobby</p>
+              <h2>Impostazioni partita</h2>
+            </div>
+            <span id="settings-owner" class="muted"
+              >Configurabili prima della connessione</span
+            >
+          </div>
+
+          <div class="settings-fields">
+            <label>
+              Formato
+              <select id="format">
+                <option value="3">3 semi</option>
+                <option value="5">5 semi</option>
+                <option value="7">7 semi</option>
+              </select>
+            </label>
+            <label>
+              Modalità
+              <select id="mode">
+                <option value="standard">Standard</option>
+                <option value="exclusive">Esclusiva</option>
+              </select>
+            </label>
+            <label>
+              Partita
+              <select id="best-of">
+                <option value="3">Best of 3</option>
+                <option value="5">Best of 5</option>
+              </select>
+            </label>
+            <label>
+              Timer (secondi)
+              <input
+                id="timer-seconds"
+                type="number"
+                min="1"
+                step="1"
+                value="5"
+              />
+            </label>
+            <button id="apply-settings" type="submit">
+              Applica impostazioni
+            </button>
+          </div>
+          <p id="settings-summary" class="muted"></p>
+        </form>
+
+        <section class="connection" aria-labelledby="connection-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">PeerJS</p>
+              <h2 id="connection-heading">Connessione</h2>
+            </div>
+            <span id="player-role" class="role-badge">Ruolo non assegnato</span>
+          </div>
+
+          <div class="peer-id-block">
+            <span class="muted">Il tuo Peer ID</span>
+            <output id="local-peer-id" class="peer-id">In attesa…</output>
+            <button
+              id="copy-peer-id"
+              type="button"
+              class="button-secondary"
+              disabled
+            >
+              Copia ID
+            </button>
+          </div>
+
+          <form id="join-form" class="join-form">
+            <label for="remote-peer-id">Peer ID dell’host</label>
+            <div class="join-controls">
+              <input
+                id="remote-peer-id"
+                type="text"
+                autocomplete="off"
+                placeholder="Incolla il Peer ID dell’host"
+                required
+              />
+              <button id="join-button" type="submit">Connettiti</button>
+              <button
+                id="disconnect-button"
+                type="button"
+                class="button-secondary"
+                disabled
+              >
+                Disconnetti
+              </button>
+            </div>
+          </form>
+
+          <div class="ready-status" aria-label="Stato giocatori">
+            <span>Host: <strong id="host-ready">In attesa</strong></span>
+            <span>Joiner: <strong id="joiner-ready">In attesa</strong></span>
+            <button id="ready-button" type="button" disabled>Pronto</button>
+          </div>
+        </section>
+      </section>
+
+      <div class="main-columns">
+        <section class="game-panel" aria-labelledby="game-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Round</p>
+              <h2 id="game-heading">Partita</h2>
+            </div>
+            <span id="round-number" class="role-badge">Round 1</span>
+          </div>
+
+          <div class="scoreboard" aria-label="Punteggio">
+            <div>
+              <span id="player-a-name">Host</span>
+              <strong id="player-a-score">0</strong>
+            </div>
+            <span class="score-separator">—</span>
+            <div>
+              <span id="player-b-name">Joiner</span>
+              <strong id="player-b-score">0</strong>
+            </div>
+          </div>
+
+          <div class="round-status">
+            <div class="timer-block">
+              <span class="muted">Tempo rimasto</span>
+              <strong><span id="timer">5</span><small> s</small></strong>
+            </div>
+            <p id="opponent-status" class="opponent-status">
+              Connettiti a una partita per iniziare.
+            </p>
+            <button id="next-round-button" type="button" disabled>
+              Avvia round successivo
+            </button>
+          </div>
+
+          <div class="choice-area">
+            <div class="section-heading">
+              <div>
+                <h3>La tua scelta</h3>
+                <p class="muted">
+                  La selezione resta nascosta fino alla risoluzione del round.
+                </p>
+              </div>
+            </div>
+            <div
+              id="color-choices"
+              class="color-choices"
+              aria-label="Semi disponibili"
+            ></div>
+            <div class="choice-actions">
+              <p id="selected-choice" class="muted">Nessun seme selezionato</p>
+              <button id="lock-button" type="button" disabled>
+                Blocca scelta
+              </button>
+            </div>
+          </div>
+
+          <section class="round-result" aria-live="polite" aria-atomic="true">
+            <p class="eyebrow">Ultimo esito</p>
+            <p id="result-message">La partita non è ancora iniziata.</p>
+            <p id="match-message" class="match-message"></p>
+          </section>
+          <p id="app-error" class="error-message" role="alert" hidden></p>
+        </section>
+
+        <section class="chat-panel" aria-labelledby="chat-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Comunicazione</p>
+              <h2 id="chat-heading">Chat</h2>
+            </div>
+          </div>
+          <ol id="chat-messages" class="chat-messages" aria-live="polite">
+            <li class="empty-chat">I messaggi appariranno qui.</li>
+          </ol>
+          <form id="chat-form" class="chat-form">
+            <label class="visually-hidden" for="chat-input">Messaggio</label>
+            <input
+              id="chat-input"
+              type="text"
+              maxlength="500"
+              autocomplete="off"
+              placeholder="Scrivi un messaggio"
+              required
+            />
+            <button id="chat-send" type="submit" disabled>Invia</button>
+          </form>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="assets/scripts/modules/ui-contoller.js"></script>
   </body>
 </html>

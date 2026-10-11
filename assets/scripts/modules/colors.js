@@ -1,9 +1,4 @@
-/**
- * Core color definitions for the game.
- *
- * This module is intentionally small and stable: the engine should
- * reference colors, not card names. Card names are visual metadata only.
- */
+// list of colors representing the suits
 export const ALL_COLORS = [
   "red",
   "blue",
@@ -14,10 +9,7 @@ export const ALL_COLORS = [
   "indigo",
 ];
 
-/**
- * Default names used only in the UI layer.
- * The game logic must never depend on these strings.
- */
+//list of default card names (when card will be used!)
 export const DEFAULT_CARD_NAMES = {
   red: "Tertial",
   blue: "Pax",
@@ -28,20 +20,14 @@ export const DEFAULT_CARD_NAMES = {
   indigo: "Torkis",
 };
 
-/**
- * Lobby formats: 3, 5 and 7 colors.
- * This keeps the allowed sets centralized and easy to extend.
- */
+//allowed colors based on the selected format
 export const FORMAT_COLORS = {
   3: ["red", "blue", "green"],
   5: ["red", "blue", "yellow", "purple", "green"],
   7: [...ALL_COLORS],
 };
 
-/**
- * Returns the active color pool for a given lobby format.
- * @param {number|string} format - 3, 5 or 7
- */
+// returns the active color pool for a given lobby format
 export function getFormatColors(format) {
   const normalizedFormat = Number(format);
 
@@ -52,16 +38,12 @@ export function getFormatColors(format) {
   return [...FORMAT_COLORS[normalizedFormat]];
 }
 
-/**
- * Simple membership check for a valid game color.
- */
+// checks if the value is a valid color
 export function isColor(value) {
   return typeof value === "string" && ALL_COLORS.includes(value);
 }
 
-/**
- * Picks a random item from a non-empty array.
- */
+// picks a random color from a given list (based on the game format; showed in "normalizeColorChoice" just below)
 export function randomChoice(items) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error("Cannot choose a random value from an empty array.");
@@ -70,9 +52,7 @@ export function randomChoice(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-/**
- * Validates a choice against the allowed pool; otherwise falls back to a random valid color.
- */
+// given the choice and allowed colors checks if the color picked is valid; otherwise picks a random one
 export function normalizeColorChoice(value, allowedColors) {
   if (!isColor(value) || !allowedColors.includes(value)) {
     return randomChoice(allowedColors);

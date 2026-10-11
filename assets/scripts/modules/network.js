@@ -2,13 +2,25 @@ import "../peerjs.min.js";
 import { isMessageValid } from "./peer-mex-validators.js";
 
 const peer = new window.Peer({ debug: 0 });
+
+// connection to opponent
 let activeConnection = null;
+
+// local handlers to change main.js state object from this module
+
+// used for ui changes
 let peerLifecycleHandler = null;
+// used for outgoing messages
 let connectionOpenHandler = null;
+// used for incoming messages
 let messageHandler = null;
+// used for disconnection specifocally
 let connectionCloseHandler = null;
+
+// connection set; used to distinguish locally closed connections from those remotely closed by other users (for example, to determine, during a disconnection, who abandoned the match and who is the winner)
 const locallyClosedConnections = new WeakSet();
 
+// listeners for connection to server
 peer.on("open", (id) => {
   peerLifecycleHandler?.({ type: "peer-open", peerId: id });
 });
@@ -50,6 +62,7 @@ function observeConnection(conn, direction) {
     }
   }, 10_000);
 
+  // listeners to connection to other peers
   conn.on("open", () => {
     clearTimeout(openTimeoutId);
     connectionOpenHandler?.({ peerId: conn.peer, direction });
@@ -121,6 +134,7 @@ export function connectToPeer(peerId) {
   observeConnection(conn, "in uscita");
 }
 
+// universal function to send peer messages
 export function sendPeerMessage(message) {
   if (!activeConnection?.open) {
     throw new Error("Cannot send a peer message without an open connection.");
@@ -132,6 +146,7 @@ export function sendPeerMessage(message) {
   activeConnection.send(message);
 }
 
+// export functions used in main.js to set local handlers
 export function setConnectionOpenHandler(handler) {
   if (typeof handler !== "function") {
     throw new TypeError("Connection-open handler must be a function.");

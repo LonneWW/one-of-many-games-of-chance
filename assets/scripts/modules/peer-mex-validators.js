@@ -14,6 +14,8 @@ export const ALLOWED_MEX_TYPES = [
   "end",
 ];
 
+// Functions to validate incoming peer messages following their respective structure
+
 export function checkMatchIds(localId, remoteId) {
   return localId === remoteId;
 }

@@ -1,20 +1,8 @@
-/**
- * Match state and player state.
- *
- * This module models the in-memory state of a match without touching the UI.
- * It keeps the rules explicit and easy to reason about:
- * - players have a color pool
- * - rounds update scores
- * - exclusive mode consumes colors
- * - disconnects resolve immediately in favor of the other player
- */
 import { getFormatColors, randomChoice } from "./colors.js";
 import { getWinningScore, validateLobbyConfig } from "./rules.js";
 
-/**
- * Creates the player status for a given lobby format.
- * The player stores both the currently available colors and the ones already used.
- */
+//Creates the player status for a given lobby format.
+//The player stores both the currently available colors and the ones already used.
 export function createPlayerState(id, name, format) {
   const availableColors = getFormatColors(format);
 
@@ -27,7 +15,6 @@ export function createPlayerState(id, name, format) {
 }
 
 function generateMatchId() {
-  // Usa l'API nativa del modulo crypto
   if (
     typeof crypto !== "undefined" &&
     typeof crypto.randomUUID === "function"
@@ -35,7 +22,7 @@ function generateMatchId() {
     return crypto.randomUUID();
   }
 
-  // Fallback per ambienti vecchi senza supporto a crypto.randomUUID
+  // Fallback for older environments without crypto.randomUUID support
   return (
     "partita-" +
     Date.now().toString(36) +
@@ -44,9 +31,7 @@ function generateMatchId() {
   );
 }
 
-/**
- * Creates the global match state from lobby configuration.
- */
+//Creates the global match state from lobby configuration.
 export function createMatchState(config = {}) {
   const settings = validateLobbyConfig(config);
 
@@ -77,12 +62,9 @@ export function createMatchState(config = {}) {
   };
 }
 
-/**
- * Applies exclusive-mode consumption rules.
- *
- * Once a color is used, it leaves the player's available set. If the pool is exhausted,
- * the player is restored to the full format pool, as required by the design.
- */
+//Applies exclusive-mode consumption rules.
+//Once a color is used, it leaves the player's available set. If the pool is exhausted,
+//the player is restored to the full format pool, as required by the design.
 export function applyExclusiveConsumption(matchState, playerKey, color) {
   const player = matchState.players[playerKey];
 
@@ -101,9 +83,7 @@ export function applyExclusiveConsumption(matchState, playerKey, color) {
   }
 }
 
-/**
- * Immediately resolves a disconnect in favor of the remaining player.
- */
+//In case of disconnect, change the current match state in favor of the remaining player
 export function resolveDisconnect(matchState, disconnectedPlayerKey) {
   const winnerKey = disconnectedPlayerKey === "playerA" ? "playerB" : "playerA";
 
@@ -122,11 +102,9 @@ export function resolveDisconnect(matchState, disconnectedPlayerKey) {
   };
 }
 
-/**
- * Checks if either player has reached the threshold to win the match.
- */
+//Checks if either player has reached the threshold to win the match; if positive, changes the match state
 export function checkMatchWinner(matchState) {
-  const scoreToWin = getWinningScore(matchState.bestOf);
+  const scoreToWin = getWinningScore(matchState.bestOf); // 3 -> 2, 5 -> 3, 7 -> 4
 
   for (const playerKey of ["playerA", "playerB"]) {
     if (matchState.scores[playerKey] >= scoreToWin) {
@@ -143,9 +121,7 @@ export function checkMatchWinner(matchState) {
   return null;
 }
 
-/**
- * Picks a valid random color for the player when time expires.
- */
+//Picks a valid random color for the player when time expires.
 export function autoChooseRandomColor(playerState) {
   if (
     !Array.isArray(playerState.remainingColors) ||

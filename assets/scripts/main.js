@@ -34,7 +34,7 @@ import {
 const initialMatchConfig = {
   format: 3,
   bestOf: 3,
-  timerSeconds: 5,
+  timerSeconds: 30,
   mode: "standard",
 };
 const CHOICE_REVEAL_GRACE_PERIOD_MS = 1000;
@@ -380,7 +380,8 @@ function maybeStartMatch() {
     state.network.localPlayerKey === "playerA" &&
     state.lobby.playerAReady &&
     state.lobby.playerBReady &&
-    !state.ui.matchStarted
+    !state.ui.matchStarted &&
+    !state.match.complete
   ) {
     OutgoingPeerMessageHandler.sendStart(true);
     state.ui.matchStarted = true;
@@ -466,7 +467,8 @@ function startTimer() {
 }
 
 function resolveCurrentRound() {
-  if (state.network.localPlayerKey !== "playerA" || state.round.resolved) return;
+  if (state.network.localPlayerKey !== "playerA" || state.round.resolved)
+    return;
   stopTimer();
 
   const result = resolveRound(state.match, {
@@ -519,7 +521,7 @@ function clonePlayerState(player) {
 }
 
 export function subscribeToGameState(listener) {
-  //da implementare in futuro, per spettatori e non
+  //da implementare meglio in futuro, per spettatori e non
   if (typeof listener !== "function") {
     throw new TypeError("State listener must be a function.");
   }
@@ -541,10 +543,13 @@ export function joinMatch(peerId) {
   if (typeof peerId !== "string" || peerId.trim().length === 0) {
     throw new TypeError("A valid Peer ID is required.");
   }
+  if (state.network.connected || state.network.status === "connecting") {
+    throw new Error("A peer connection is already active or in progress.");
+  }
+  connectToPeer(peerId);
   state.network.status = "connecting";
   state.ui.error = null;
   publishState();
-  connectToPeer(peerId);
 }
 
 export function setReady(ready) {
@@ -557,6 +562,9 @@ export function setReady(ready) {
   }
   if (state.ui.matchStarted) {
     throw new Error("Ready state cannot change after the match starts.");
+  }
+  if (state.match.complete) {
+    throw new Error("Ready state cannot change after the match is over.");
   }
 
   OutgoingPeerMessageHandler.sendReady(ready);

@@ -1,20 +1,9 @@
-/**
- * Round resolution logic.
- *
- * This module handles the critical sequence of a round:
- * 1. receive or normalize each player's selection
- * 2. detect draw vs. winner
- * 3. update score and match state
- * 4. consume colors in exclusive mode when required
- */
 import { randomChoice } from "./colors.js";
 import { getWinnerColor } from "./rules.js";
 import { applyExclusiveConsumption, checkMatchWinner } from "./matchState.js";
 
-/**
- * Ensures each player has a valid color choice.
- * If a timeout happens or a selection is invalid, a random allowed color is chosen.
- */
+//Ensures each player has a valid color choice.
+//If a timeout happens or a selection is invalid, a random allowed color is chosen.
 function normalizeSelection(playerState, selection) {
   if (selection && playerState.remainingColors.includes(selection)) {
     return selection;
@@ -22,9 +11,7 @@ function normalizeSelection(playerState, selection) {
   return randomChoice(playerState.remainingColors);
 }
 
-/**
- * Resolves one round based on both player choices.
- */
+// Resolves one round based on both player choices. (used esclusively by the host!)
 export function resolveRound(matchState, selections = {}) {
   const playerAChoice = normalizeSelection(
     matchState.players.playerA,

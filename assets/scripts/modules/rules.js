@@ -1,5 +1,6 @@
 import { FORMAT_COLORS, getFormatColors, isColor } from "./colors.js";
 
+// win matrix; defines the winning conditions of a color
 export const WIN_MATRIX = Object.freeze({
   red: ["blue", "yellow", "orange"], // lose against green, purple, indigo
   blue: ["green", "yellow", "orange"], // lose against red, purple, indigo
@@ -12,7 +13,7 @@ export const WIN_MATRIX = Object.freeze({
 
 export const BEST_OF_FORMATS = [3, 5];
 
-export const VALID_FORMATS = Object.keys(FORMAT_COLORS).map(Number);
+export const VALID_FORMATS = Object.keys(FORMAT_COLORS).map(Number); // easier to map format color in case of future additions (VERY difficult)
 
 export function getWinnerColor(firstColor, secondColor) {
   if (!isColor(firstColor) || !isColor(secondColor)) {
@@ -34,7 +35,7 @@ export function validateLobbyConfig(config = {}) {
   const timerSeconds = Number(config.timerSeconds ?? 30);
 
   if (!VALID_FORMATS.includes(format)) {
-    throw new Error(`Format must be 3, 5 or 7. Received: ${format}`);
+    throw new Error(`Format must be 3, 5 or 7. Received: ${format}`); // Error messages are not dynamic atm, but it's currently unnecessary
   }
 
   if (!BEST_OF_FORMATS.includes(bestOf)) {
