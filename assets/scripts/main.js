@@ -339,6 +339,43 @@ function resolveMatchDisconnect(connectionContext, localPlayerDisconnected) {
   publishState();
 }
 
+function canReturnToConfiguration() {
+  return (
+    state.match.complete &&
+    ["match_won", "disconnect"].includes(state.match.reason)
+  );
+}
+
+function resetToConfiguration() {
+  const config = {
+    format: state.match.format,
+    mode: state.match.mode,
+    bestOf: state.match.bestOf,
+    timerSeconds: state.match.timerSeconds,
+    playerOneName: state.match.players.playerA.name,
+    playerTwoName: state.match.players.playerB.name,
+  };
+
+  stopTimer();
+  state.match = createMatchState(config);
+  state.round = createRoundState(state.match.timerSeconds);
+  state.lobby = { playerAReady: false, playerBReady: false };
+  state.chat = [];
+  state.ui.result = null;
+  state.ui.error = null;
+  state.ui.isRunning = false;
+  state.ui.matchStarted = false;
+  state.network.connected = false;
+  state.network.remotePeerId = null;
+  state.network.localPlayerKey = null;
+  state.network.remotePlayerKey = null;
+  state.network.status = state.network.localPeerId
+    ? "available"
+    : "initializing";
+
+  publishState();
+}
+
 function applyRoundResult(result) {
   state.round.resolved = true;
   state.match.lastRound = result;
@@ -652,6 +689,19 @@ export function disconnectMatch() {
   disconnectPeer();
 }
 
+export function closeCompletedMatch() {
+  if (!canReturnToConfiguration()) {
+    throw new Error("Only a completed match can be closed.");
+  }
+
+  if (state.network.connected) {
+    disconnectPeer();
+    return;
+  }
+
+  resetToConfiguration();
+}
+
 setPeerLifecycleHandler((event) => {
   switch (event.type) {
     case "peer-open":
@@ -682,6 +732,12 @@ setMessageHandler((message, connectionContext) => {
 
 setConnectionCloseHandler((connectionContext) => {
   state.network.connected = false;
+
+  if (canReturnToConfiguration()) {
+    resetToConfiguration();
+    return;
+  }
+
   state.network.status = "disconnected";
   if (state.ui.matchStarted) {
     resolveMatchDisconnect(

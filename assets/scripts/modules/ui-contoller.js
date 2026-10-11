@@ -1,4 +1,5 @@
 import {
+  closeCompletedMatch,
   configureMatch,
   disconnectMatch,
   getGameState,
@@ -46,6 +47,7 @@ const elements = {
   lockButton: document.getElementById("lock-button"),
   resultMessage: document.getElementById("result-message"),
   matchMessage: document.getElementById("match-message"),
+  closeMatchButton: document.getElementById("close-match-button"),
   appError: document.getElementById("app-error"),
   chatMessages: document.getElementById("chat-messages"),
   chatForm: document.getElementById("chat-form"),
@@ -104,6 +106,10 @@ elements.lockButton.addEventListener("click", () => {
 
 elements.nextRoundButton.addEventListener("click", () => {
   runAction(startRound);
+});
+
+elements.closeMatchButton.addEventListener("click", () => {
+  runAction(closeCompletedMatch);
 });
 
 elements.colorChoices.addEventListener("click", (event) => {
@@ -220,6 +226,11 @@ function renderLobby(state) {
 }
 
 function renderGame(state) {
+  elements.closeMatchButton.hidden = !(
+    state.match.complete &&
+    ["match_won", "disconnect"].includes(state.match.reason)
+  );
+
   const localPlayerKey = state.network.localPlayerKey;
   const remotePlayerKey = state.network.remotePlayerKey;
   const localChoice = localPlayerKey
